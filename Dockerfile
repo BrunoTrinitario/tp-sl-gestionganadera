@@ -18,4 +18,4 @@ RUN npm run build
 EXPOSE 3000
 
 # 7. Comando para desarrollo (no recomendado después de build)
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start"]
