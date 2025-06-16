@@ -1,0 +1,32 @@
+name: CI pipeline
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: debian-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Lint (reglas de estilo)
+        run: npm run lint
+      
+      - name: Build (opcional)
+        run: npm run build
+
+      #- name: Correr tests
+      #        run: npm test
