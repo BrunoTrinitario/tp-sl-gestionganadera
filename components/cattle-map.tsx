@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, Rectangle, useMap } from "react
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import { useCattle, type Cattle } from "@/lib/cattle-context"
+import Image from 'next/image';
 
 // Icono personalizado para las vacas
 const cowIcon = new L.Icon({
@@ -97,7 +98,7 @@ export default function CattleMap() {
             <div className="text-center">
               <h3 className="font-semibold">{cow.name}</h3>
               <div className="my-2">
-                <img
+                <Image
                   src={cow.imageUrl || "/placeholder.svg"}
                   alt={cow.name}
                   className="w-16 h-16 mx-auto rounded-full object-cover"

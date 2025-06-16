@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useCattle } from "@/lib/cattle-context"
+import Image from 'next/image';
 
 // Función para calcular la distancia entre dos puntos (Haversine formula)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -184,7 +185,7 @@ export default function CattleList() {
             >
               <div className="flex-shrink-0 mr-3">
                 <div className="relative">
-                  <img
+                  <Image
                     src={cow.imageUrl || "/placeholder.svg"}
                     alt={cow.name}
                     className="w-10 h-10 rounded-full object-cover"
