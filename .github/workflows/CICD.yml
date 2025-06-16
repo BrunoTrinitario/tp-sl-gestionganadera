@@ -30,3 +30,7 @@ jobs:
 
       #- name: Correr tests
       #        run: npm test
+
+      - name: Deploy en Render
+        if: success()
+        run: curl -X POST https://api.render.com/deploy/srv-d17n7kodl3ps738uit5g?key=ne0yX-MR30g
