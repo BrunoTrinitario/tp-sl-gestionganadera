@@ -18,6 +18,8 @@ RUTA_LOG="/var/log/${NOMBRE_SERVICIO}.log"
 URI_ATLAS="mongodb+srv://tpswlibre:tpswlibre@cluster0.au5dvsc.mongodb.net/$2"
 
 # Crear carpeta de backups y log
+systemctl stop "$NOMBRE_SERVICIO"
+
 mkdir -p "$RUTA_BACKUP"
 touch "$RUTA_LOG"
 
