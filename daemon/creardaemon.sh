@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Validar argumento
-if [ -z "$1" ]; then
-  echo "Uso: $0 <intervalo_en_horas>"
+if [ -z "$1" ] || [ -z "$2" ]; then
+  echo "Uso: $0 <intervalo_en_horas> <nombre_base>"
   exit 1
 fi
 
@@ -15,7 +15,7 @@ RUTA_BACKUP="/var/backups/mongodb"
 RUTA_SCRIPT="/usr/local/bin/${NOMBRE_SERVICIO}.sh"
 RUTA_UNIT="/etc/systemd/system/${NOMBRE_SERVICIO}.service"
 RUTA_LOG="/var/log/${NOMBRE_SERVICIO}.log"
-URI_ATLAS="mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/<dbname>"  # CAMBIAR
+URI_ATLAS="mongodb+srv://tpswlibre:tpswlibre@cluster0.au5dvsc.mongodb.net/$2"
 
 # Crear carpeta de backups y log
 mkdir -p "$RUTA_BACKUP"
