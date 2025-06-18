@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { connectDB } from "@/lib/database/connect"
+import User from "@/lib/database/models/user"
 
 /**
  * GET /api/users
@@ -7,62 +9,58 @@ import type { NextRequest } from "next/server"
  */
 export async function GET(request: NextRequest) {
   try {
+    await connectDB()
     // Obtener parámetros de búsqueda de la URL
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get("search") || ""
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Number.parseInt(searchParams.get("limit") || "10")
 
-    // Simulación de datos de usuarios
-    const users = [
-      {
-        id: "1",
-        name: "Administrador",
-        email: "admin@ejemplo.com",
-        role: "Administrador",
-        createdAt: "2023-01-15",
-      },
-      {
-        id: "2",
-        name: "Juan Pérez",
-        email: "juan@ejemplo.com",
-        role: "Supervisor",
-        createdAt: "2023-02-20",
-      },
-      {
-        id: "3",
-        name: "María López",
-        email: "maria@ejemplo.com",
-        role: "Operador",
-        createdAt: "2023-03-10",
-      },
-      // Otros usuarios se agregarían aquí
-    ]
+    // Construir el filtro de MongoDB
+    const filter: any = {}
 
     // Filtrar por término de búsqueda si existe
-    const filteredUsers = search
-      ? users.filter(
-          (user) =>
-            user.name.toLowerCase().includes(search.toLowerCase()) ||
-            user.email.toLowerCase().includes(search.toLowerCase()) ||
-            user.role.toLowerCase().includes(search.toLowerCase()),
-        )
-      : users
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+      ]
+    }
 
-    // Paginación simple
-    const startIndex = (page - 1) * limit
-    const endIndex = page * limit
-    const paginatedUsers = filteredUsers.slice(startIndex, endIndex)
+    // Calcular skip para paginación
+    const skip = (page - 1) * limit
+
+    // Contar total de documentos para paginación
+    const total = await User.countDocuments(filter)
+
+    // Obtener usuarios paginados
+    const users = await User.find(filter)
+      .select("-password") // Excluir contraseña
+      .skip(skip)
+      .limit(limit)
+      .lean()
+
+    // Serializar los datos para la respuesta
+    const serializedUsers = users.map((user: any) => ({
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt
+        ? new Date(user.createdAt).toISOString().split("T")[0]
+        : null,
+    }))
 
     return NextResponse.json(
       {
         success: true,
-        data: paginatedUsers,
+        data: serializedUsers,
         pagination: {
-          total: filteredUsers.length,
+          total,
           page,
           limit,
-          pages: Math.ceil(filteredUsers.length / limit),
+          pages: Math.ceil(total / limit),
         },
       },
       { status: 200 },
@@ -85,9 +83,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    await connectDB()
     // Obtener datos del cuerpo de la solicitud
     const body = await request.json()
-    const { name, email, password } = body
+    const { name, email, password, role = "Operador" } = body
 
     // Validar campos requeridos
     if (!name || !email || !password) {
@@ -112,19 +111,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Simulación de creación de usuario
-    const newUser = {
-      id: Date.now().toString(),
+    // Verificar si el usuario ya existe
+    const existingUser = await User.findOne({ email })
+    if (existingUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Ya existe un usuario con ese correo electrónico",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Hash de la contraseña
+
+    // Crear nuevo usuario
+    const newUser = new User({
       name,
       email,
-      role: "Operador", // Rol por defecto
-      createdAt: new Date().toISOString().split("T")[0],
+      password,
+      role,
+      createdAt: new Date(),
+    })
+
+    await newUser.save()
+
+    // Respuesta sin incluir la contraseña
+    const userResponse = {
+      id: newUser._id.toString(),
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      createdAt: new Date(newUser.createdAt).toISOString().split("T")[0],
     }
 
     return NextResponse.json(
       {
         success: true,
-        data: newUser,
+        data: userResponse,
         message: "Usuario creado correctamente",
       },
       { status: 201 },
@@ -135,6 +159,61 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: "Error al crear usuario",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+/**
+ * DELETE /api/users/:id
+ * Elimina un usuario por su ID
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB()
+
+    // Obtener el ID del usuario desde la URL
+    const url = new URL(request.url)
+    const parts = url.pathname.split("/")
+    const userId = parts[parts.length - 1]
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ID de usuario no proporcionado",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Eliminar el usuario
+    const deletedUser = await User.findByIdAndDelete(userId)
+
+    if (!deletedUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Usuario no encontrado",
+        },
+        { status: 404 },
+      )
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Usuario eliminado correctamente",
+      },
+      { status: 200 },
+    )
+  } catch (error) {
+    console.error("Error al eliminar usuario:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error al eliminar usuario",
       },
       { status: 500 },
     )

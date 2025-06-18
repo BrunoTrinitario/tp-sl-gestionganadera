@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { connectDB } from "@/lib/database/connect"
+import Cattle from "@/lib/database/models/cattle"
 
 /**
  * GET /api/cattle
@@ -7,6 +9,7 @@ import type { NextRequest } from "next/server"
  */
 export async function GET(request: NextRequest) {
   try {
+    await connectDB()
     // Obtener parámetros de búsqueda de la URL
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get("search") || ""
@@ -16,81 +19,84 @@ export async function GET(request: NextRequest) {
     const lng = searchParams.get("lng") ? Number.parseFloat(searchParams.get("lng") || "") : null
     const radius = searchParams.get("radius") ? Number.parseFloat(searchParams.get("radius") || "") : null
 
-    // Simulación de datos de ganado
-    const cattle = [
-      {
-        id: "cow-1",
-        name: "Bella",
-        description: "Holstein de 5 años, alta productora de leche",
-        imageUrl: "/placeholder.svg?height=200&width=200",
-        position: [40.7128, -74.006] as [number, number],
-        connected: true,
-        zoneId: "farm",
-      },
-      {
-        id: "cow-2",
-        name: "Luna",
-        description: "Jersey de 3 años, excelente calidad de leche",
-        imageUrl: "/placeholder.svg?height=200&width=200",
-        position: [40.7138, -74.008] as [number, number],
-        connected: true,
-        zoneId: "stables",
-      },
-      {
-        id: "cow-3",
-        name: "Estrella",
-        description: "Angus de 4 años, buena para carne",
-        imageUrl: "/placeholder.svg?height=200&width=200",
-        position: [40.7148, -74.007] as [number, number],
-        connected: false,
-        zoneId: "pasture",
-      },
-      // Otros animales se agregarían aquí
-    ]
+    // Ordenar por (default: distancia si hay búsqueda geoespacial)
+    const sortBy = searchParams.get("sortBy") || (lat && lng ? "distance" : "name")
 
-    // Función para calcular la distancia entre dos puntos (Haversine formula)
-    function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-      const R = 6371 // Radio de la Tierra en km
-      const dLat = ((lat2 - lat1) * Math.PI) / 180
-      const dLon = ((lon2 - lon1) * Math.PI) / 180
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-      return R * c // Distancia en km
-    }
+    // Construir el filtro de MongoDB
+    const filter: any = {}
+    const sort: any = {}
 
-    // Aplicar filtros
-    let filteredCattle = cattle
-
-    // Filtrar por término de búsqueda
     if (search) {
-      filteredCattle = filteredCattle.filter((cow) => cow.name.toLowerCase().includes(search.toLowerCase()))
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ]
     }
 
-    // Filtrar por zona
     if (zoneId) {
-      filteredCattle = filteredCattle.filter((cow) => cow.zoneId === zoneId)
+      filter.zoneId = zoneId
     }
 
-    // Filtrar por estado de conexión
-    if (connected !== null) {
-      const isConnected = connected === "true"
-      filteredCattle = filteredCattle.filter((cow) => cow.connected === isConnected)
+    if (connected !== null && connected !== undefined) {
+      filter.connected = connected === "true"
     }
 
-    // Filtrar por ubicación (coordenadas y radio)
+    // Filtro geoespacial
     if (lat !== null && lng !== null && radius !== null) {
-      filteredCattle = filteredCattle.filter((cow) => {
-        const distance = calculateDistance(lat, lng, cow.position[0], cow.position[1])
-        return distance <= radius
-      })
+      filter.position = {
+        $near: {
+          $geometry: {
+            type: "Point",
+            coordinates: [lng, lat], // [long, lat]
+          },
+          $maxDistance: radius * 1000, // metros
+        },
+      }
+      // Con $near ya viene ordenado por distancia automáticamente
+    } else {
+      // Ordenar por nombre si no hay búsqueda geoespacial
+      sort.name = 1
     }
+
+    const cattle = await Cattle.find(filter).sort(sort).lean()
+
+    // Calcular distancias para cada resultado si hay búsqueda geoespacial
+    const serializedCattle = cattle.map((cow: any) => {
+      const result = {
+        id: cow._id.toString(),
+        name: cow.name,
+        description: cow.description,
+        imageUrl: cow.imageUrl,
+        position: cow.position,
+        connected: cow.connected,
+        zoneId: cow.zoneId ? cow.zoneId.toString() : null,
+      }
+
+      // Agregar distancia si se hizo búsqueda geoespacial
+      if (lat && lng) {
+        const [cowLng, cowLat] = cow.position.coordinates
+        const R = 6371 // Radio de la Tierra en km
+        const dLat = ((cowLat - lat) * Math.PI) / 180
+        const dLon = ((cowLng - lng) * Math.PI) / 180
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat * Math.PI) / 180) * Math.cos((cowLat * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        const distance = R * c
+
+        return {
+          ...result,
+          distance: parseFloat(distance.toFixed(2)) // distancia en km con 2 decimales
+        }
+      }
+
+      return result
+    })
 
     return NextResponse.json(
       {
         success: true,
-        data: filteredCattle,
+        data: serializedCattle,
       },
       { status: 200 },
     )
