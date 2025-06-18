@@ -1,17 +1,30 @@
 import { NextResponse } from "next/server"
+import { connectDB } from "@/lib/database/connect"
+import Cattle from "@/lib/database/models/cattle"
+import Zone from "@/lib/database/models/zone"
 
 /**
  * GET /api/dashboard
- * Obtiene los datos para el dashboard
+ * Obtiene los datos para el dashboard desde la base de datos
  */
 export async function GET() {
   try {
-    // Simulación de datos para el dashboard
+    await connectDB()
+    
+    // Obtener estadísticas reales de la base de datos
+    const totalCattle = await Cattle.countDocuments()
+    const connectedCattle = await Cattle.countDocuments({ connected: true })
+    const totalZones = await Zone.countDocuments()
+    
+    // Por ahora, asumimos que no hay una colección específica de alertas
+    // Si existiera, se podría reemplazar con: const alerts = await Alert.countDocuments()
+    const alerts = 0
+    
     const dashboardData = {
-      totalCattle: 20,
-      connectedCattle: 18,
-      totalZones: 7,
-      alerts: 0,
+      totalCattle,
+      connectedCattle,
+      totalZones,
+      alerts,
       lastUpdated: new Date().toISOString(),
     }
 

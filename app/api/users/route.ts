@@ -47,9 +47,6 @@ export async function GET(request: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role,
-      createdAt: user.createdAt
-        ? new Date(user.createdAt).toISOString().split("T")[0]
-        : null,
     }))
 
     return NextResponse.json(
@@ -131,7 +128,6 @@ export async function POST(request: NextRequest) {
       email,
       password,
       role,
-      createdAt: new Date(),
     })
 
     await newUser.save()
@@ -142,7 +138,6 @@ export async function POST(request: NextRequest) {
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
-      createdAt: new Date(newUser.createdAt).toISOString().split("T")[0],
     }
 
     return NextResponse.json(
