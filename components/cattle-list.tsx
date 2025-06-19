@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, MapPin, X } from "lucide-react"
+import { Search, MapPin, X, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,24 @@ import { Separator } from "@/components/ui/separator"
 import { useCattle } from "@/lib/cattle-context"
 import Image from 'next/image'
 import Fuse from 'fuse.js'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/use-toast"
 
 // Función para calcular la distancia entre dos puntos (Haversine formula)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -24,7 +42,8 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 export default function CattleList() {
-  const { cattle, zones, selectedCattleId, setSelectedCattleId } = useCattle()
+  // Usa el hook al inicio del componente (nivel superior)
+  const { cattle, zones, selectedCattleId, setSelectedCattleId, fetchCattle } = useCattle()
   const [searchTerm, setSearchTerm] = useState("")
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false)
   const [latitude, setLatitude] = useState("")
@@ -32,6 +51,17 @@ export default function CattleList() {
   const [radius, setRadius] = useState("")
   const [isLocationSearchActive, setIsLocationSearchActive] = useState(false)
   const [searchResults, setSearchResults] = useState(cattle)
+  const { toast } = useToast()
+  
+  // Estado para el formulario de nuevo ganado
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [newCattle, setNewCattle] = useState({
+    name: "",
+    description: "",
+    zoneId: "",
+    imageUrl: "/placeholder.svg?height=200&width=200", // Imagen por defecto
+  })
   
   // Configuración de Fuse.js
   const fuseOptions = {
@@ -94,26 +124,197 @@ export default function CattleList() {
     setIsLocationSearchActive(false)
   }
 
+  // Función para manejar el envío del formulario
+  const handleAddCattle = async () => {
+    // Validar campos obligatorios
+    if (!newCattle.name.trim()) {
+      toast({
+        title: "Error",
+        description: "El nombre es obligatorio",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!newCattle.description.trim()) {
+      toast({
+        title: "Error",
+        description: "La descripción es obligatoria",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Usar coordenadas aproximadas del centro de la zona si está seleccionada
+    // o del centro de la granja si no hay zona seleccionada
+    let position: [number, number] = [40.7128, -74.006] // Coordenadas por defecto
+    
+    // Si se seleccionó una zona, usar las coordenadas centrales de esa zona
+    if (newCattle.zoneId) {
+      const selectedZone = zones.find(zone => zone.id === newCattle.zoneId)
+      if (selectedZone) {
+        const [[lat1, lng1], [lat2, lng2]] = selectedZone.bounds
+        position = [(lat1 + lat2) / 2, (lng1 + lng2) / 2] // Punto central de la zona
+      }
+    } else {
+      // Si no hay zona seleccionada, usar el centro de la primera zona (la granja)
+      if (zones.length > 0) {
+        const farmZone = zones[0]
+        const [[lat1, lng1], [lat2, lng2]] = farmZone.bounds
+        position = [(lat1 + lat2) / 2, (lng1 + lng2) / 2]
+      }
+    }
+
+    try {
+      setIsSubmitting(true)
+      
+      const response = await fetch('/api/cattle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newCattle.name,
+          description: newCattle.description,
+          zoneId: newCattle.zoneId || null,
+          imageUrl: newCattle.imageUrl,
+          position: position,
+          connected: true, // Por defecto conectado
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast({
+          title: "¡Éxito!",
+          description: `${newCattle.name} ha sido añadido correctamente`,
+        })
+
+        // Cerrar diálogo y reiniciar formulario
+        setIsAddDialogOpen(false)
+        setNewCattle({
+          name: "",
+          description: "",
+          zoneId: "",
+          imageUrl: "/placeholder.svg?height=200&width=200",
+        })
+
+        // Usar la referencia a fetchCattle que obtuvimos en el nivel superior
+        fetchCattle()
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al crear el animal",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error al añadir ganado:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo agregar el ganado. Intenta de nuevo más tarde.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-        <Input
-          type="search"
-          placeholder="Buscar ganado..."
-          className="pl-8"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="absolute right-1 top-1 h-7 w-7 px-0"
-          onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-        >
-          <MapPin className="h-4 w-4" />
-          <span className="sr-only">Búsqueda avanzada</span>
-        </Button>
+      <div className="flex justify-between items-center mb-2">
+        <div className="relative flex-1 mr-2">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          <Input
+            type="search"
+            placeholder="Buscar ganado..."
+            className="pl-8"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute right-1 top-1 h-7 w-7 px-0"
+            onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+          >
+            <MapPin className="h-4 w-4" />
+            <span className="sr-only">Búsqueda avanzada</span>
+          </Button>
+        </div>
+        
+        {/* Botón para agregar nuevo ganado */}
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="whitespace-nowrap">
+              <Plus className="h-4 w-4 mr-1" />
+              Agregar
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Agregar nuevo animal</DialogTitle>
+              <DialogDescription>
+                Completa el formulario para agregar un nuevo animal al sistema.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nombre *</Label>
+                <Input
+                  id="name"
+                  placeholder="Nombre del animal"
+                  value={newCattle.name}
+                  onChange={(e) => setNewCattle({ ...newCattle, name: e.target.value })}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="description">Descripción *</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Descripción o características"
+                  value={newCattle.description}
+                  onChange={(e) => setNewCattle({ ...newCattle, description: e.target.value })}
+                  className="resize-none"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="zone">Zona</Label>
+                <Select 
+                  value={newCattle.zoneId || "none"} 
+                  onValueChange={(value) => setNewCattle({ 
+                    ...newCattle, 
+                    zoneId: value === "none" ? "" : value 
+                  })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona una zona" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin zona</SelectItem>
+                    {zones.map((zone) => (
+                      <SelectItem key={zone.id} value={zone.id}>
+                        {zone.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>
+                Cancelar
+              </Button>
+              <Button onClick={handleAddCattle} disabled={isSubmitting}>
+                {isSubmitting ? "Guardando..." : "Guardar animal"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Búsqueda avanzada */}

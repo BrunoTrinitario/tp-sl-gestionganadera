@@ -31,6 +31,7 @@ interface CattleContextType {
   setSelectedCattleId: (id: string | null) => void
   selectedZoneId: string | null
   setSelectedZoneId: (id: string | null) => void
+  fetchCattle: () => Promise<void>  // Nueva función para refrescar datos
 }
 
 const CattleContext = createContext<CattleContextType | undefined>(undefined)
@@ -179,9 +180,18 @@ export function CattleProvider({ children }: { children: ReactNode }) {
           // Determinar en qué zona está
           let newZoneId: string | null = null
 
-          for (const zone of zones) {
-            const [[zMinLat, zMinLng], [zMaxLat, zMaxLng]] = zone.bounds
+          // 1. Ordenar zonas por tamaño (de menor a mayor)
+          const sortedZones = [...zones].sort((a, b) => {
+            // Cálculo aproximado del área de cada zona
+            const areaA = Math.abs((a.bounds[1][0] - a.bounds[0][0]) * (a.bounds[1][1] - a.bounds[0][1]));
+            const areaB = Math.abs((b.bounds[1][0] - b.bounds[0][0]) * (b.bounds[1][1] - b.bounds[0][1]));
+            return areaA - areaB; // Ordenar desde las más pequeñas (específicas) a las más grandes
+          });
 
+          // 2. Recorrer zonas ordenadas
+          for (const zone of sortedZones) {
+            const [[zMinLat, zMinLng], [zMaxLat, zMaxLng]] = zone.bounds
+            
             if (
               newPosition[0] >= zMinLat &&
               newPosition[0] <= zMaxLat &&
@@ -268,6 +278,7 @@ export function CattleProvider({ children }: { children: ReactNode }) {
         setSelectedCattleId,
         selectedZoneId,
         setSelectedZoneId,
+        fetchCattle, // Exponemos la función para refrescar los datos
       }}
     >
       {children}
@@ -278,7 +289,7 @@ export function CattleProvider({ children }: { children: ReactNode }) {
 export function useCattle() {
   const context = useContext(CattleContext)
   if (context === undefined) {
-    throw new Error("useCattle must be used within a CattleProvider")
+    throw new Error("useCattle debe ser usado dentro de un CattleProvider")
   }
   return context
 }

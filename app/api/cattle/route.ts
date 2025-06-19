@@ -111,3 +111,94 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+/**
+ * POST /api/cattle
+ * Crea un nuevo animal
+ */
+export async function POST(request: Request) {
+  try {
+    await connectDB()
+    const body = await request.json()
+    const { name, description, imageUrl, position, connected, zoneId } = body
+
+    if (!name || !position || !Array.isArray(position) || position.length !== 2) {
+      return NextResponse.json(
+        { error: "Faltan campos obligatorios o posición inválida" },
+        { status: 400 }
+      )
+    }
+
+    const newCattle = await Cattle.create({
+      name,
+      description,
+      imageUrl,
+      position: {
+        type: "Point",
+        coordinates: [position[1], position[0]], // [lng, lat]
+      },
+      connected: connected ?? true,
+      zoneId: zoneId ?? null,
+    })
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          id: newCattle._id.toString(),
+          name: newCattle.name,
+          description: newCattle.description,
+          imageUrl: newCattle.imageUrl,
+          position: newCattle.position,
+          connected: newCattle.connected,
+          zoneId: newCattle.zoneId ? newCattle.zoneId.toString() : null,
+        }
+      },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error("Error al crear ganado:", error)
+    return NextResponse.json(
+      { error: "Error al crear ganado" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * DELETE /api/cattle?id=CATTLE_ID
+ * Elimina un animal por su ID
+ */
+export async function DELETE(request: Request) {
+  try {
+    await connectDB()
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID de ganado no proporcionado" },
+        { status: 400 }
+      )
+    }
+
+    const deleted = await Cattle.findByIdAndDelete(id)
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Ganado no encontrado" },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json(
+      { success: true, message: "Ganado eliminado correctamente" },
+      { status: 200 }
+    )
+  } catch (error) {
+    console.error("Error al eliminar ganado:", error)
+    return NextResponse.json(
+      { error: "Error al eliminar ganado" },
+      { status: 500 }
+    )
+  }
+}
