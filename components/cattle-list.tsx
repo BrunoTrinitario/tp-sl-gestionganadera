@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Search, MapPin, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useCattle } from "@/lib/cattle-context"
-import Image from 'next/image';
+import Image from 'next/image'
+import Fuse from 'fuse.js'
 
 // Función para calcular la distancia entre dos puntos (Haversine formula)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -30,19 +31,43 @@ export default function CattleList() {
   const [longitude, setLongitude] = useState("")
   const [radius, setRadius] = useState("")
   const [isLocationSearchActive, setIsLocationSearchActive] = useState(false)
-
-  // Filtrar vacas por término de búsqueda
-  let filteredCattle = cattle.filter(
-    (cow) =>
-      cow.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (cow.zoneId &&
-        zones
-          .find((z) => z.id === cow.zoneId)
-          ?.name.toLowerCase()
-          .includes(searchTerm.toLowerCase())),
-  )
-
+  const [searchResults, setSearchResults] = useState(cattle)
+  
+  // Configuración de Fuse.js
+  const fuseOptions = {
+    keys: ['name', 'description'],
+    threshold: 0.3, // Umbral de coincidencia (0.0 = coincidencia perfecta, 1.0 = coincidencia muy difusa)
+    includeScore: true, // Incluir puntuación de coincidencia
+    ignoreLocation: true, // No considerar la ubicación de la coincidencia
+    findAllMatches: true,
+  }
+  
+  // Crear el índice Fuse cuando cambia la lista de ganado
+  const fuse = useMemo(() => {
+    // Enriquecer los datos con información de zona para la búsqueda
+    const enrichedCattle = cattle.map(cow => ({
+      ...cow, 
+      zoneName: cow.zoneId ? zones.find(z => z.id === cow.zoneId)?.name || "" : ""
+    }))
+    return new Fuse(enrichedCattle, fuseOptions)
+  }, [cattle, zones])
+  
+  // Realizar búsqueda cuando cambia el término de búsqueda
+  useEffect(() => {
+    if (!searchTerm) {
+      setSearchResults(cattle)
+      return
+    }
+    
+    const results = fuse.search(searchTerm)
+    // Extraer los objetos de los resultados de búsqueda
+    const matchedCattle = results.map(result => result.item)
+    setSearchResults(matchedCattle)
+  }, [searchTerm, cattle, fuse])
+  
   // Filtrar por ubicación si la búsqueda avanzada está activa
+  let filteredCattle = searchResults
+  
   if (isLocationSearchActive && latitude && longitude && radius) {
     const lat = Number.parseFloat(latitude)
     const lng = Number.parseFloat(longitude)

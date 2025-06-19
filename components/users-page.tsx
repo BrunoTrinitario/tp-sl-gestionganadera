@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight, MoreHorizontal, Search, Trash, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
+import Fuse from 'fuse.js'
 
 // Tipo para el usuario
 type User = {
@@ -55,6 +56,8 @@ export default function UsersPage() {
     password: "",
   })
   const [users, setUsers] = useState<User[]>([])
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([])
+  const [allUsers, setAllUsers] = useState<User[]>([]) // Para búsqueda local
   const [pagination, setPagination] = useState<Pagination>({
     total: 0,
     page: 1,
@@ -62,20 +65,60 @@ export default function UsersPage() {
     pages: 0,
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [isFuseActive, setIsFuseActive] = useState(false)
 
-  // Debounce search term
+  // Configuración de Fuse.js
+  const fuseOptions = {
+    keys: ['name', 'email', 'role'],
+    threshold: 0.3,
+    includeScore: true,
+    ignoreLocation: true
+  }
+  
+  // Crear el índice Fuse
+  const fuse = useMemo(() => new Fuse(allUsers, fuseOptions), [allUsers])
+  
+  // Debounce search term para la API
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm)
-    }, 500)
+      if (searchTerm) {
+        // Si hay término de búsqueda, usamos Fuse para búsqueda local
+        setIsFuseActive(true)
+        const results = fuse.search(searchTerm)
+        setFilteredUsers(results.map(result => result.item))
+      } else {
+        setIsFuseActive(false)
+        setDebouncedSearchTerm("")
+        setFilteredUsers(users)
+      }
+    }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm])
+  }, [searchTerm, fuse, users])
 
   // Fetch users when page, limit or search changes
   useEffect(() => {
-    fetchUsers()
-  }, [pagination.page, pagination.limit, debouncedSearchTerm])
+    if (!isFuseActive) {
+      fetchUsers()
+    }
+  }, [pagination.page, pagination.limit, debouncedSearchTerm, isFuseActive])
+  
+  // Cargar todos los usuarios para búsqueda local
+  useEffect(() => {
+    const loadAllUsers = async () => {
+      try {
+        const response = await fetch(`/api/users?limit=100`) // Cargar más usuarios para búsqueda local
+        const data = await response.json()
+        if (data.success) {
+          setAllUsers(data.data)
+        }
+      } catch (error) {
+        console.error("Error fetching all users:", error)
+      }
+    }
+    
+    loadAllUsers()
+  }, [])
 
   // Function to fetch users from API
   const fetchUsers = async () => {
@@ -95,6 +138,7 @@ export default function UsersPage() {
 
       if (data.success) {
         setUsers(data.data)
+        setFilteredUsers(data.data) // Inicialmente los mismos
         setPagination(data.pagination)
       } else {
         toast({
@@ -311,7 +355,7 @@ export default function UsersPage() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
               <Input
                 type="search"
-                placeholder="Buscar usuarios..."
+                placeholder="Buscar usuarios... (nombre, email, rol)"
                 className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -335,14 +379,14 @@ export default function UsersPage() {
                         Cargando usuarios...
                       </TableCell>
                     </TableRow>
-                  ) : users.length === 0 ? (
+                  ) : filteredUsers.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
                         No se encontraron usuarios
                       </TableCell>
                     </TableRow>
                   ) : (
-                    users.map((user) => (
+                    filteredUsers.map((user) => (
                       <TableRow key={user.id}>
                         <TableCell className="font-medium">{user.name}</TableCell>
                         <TableCell>{user.email}</TableCell>
@@ -376,30 +420,32 @@ export default function UsersPage() {
               </Table>
             </div>
 
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Mostrando <span className="font-medium">{users.length}</span> de{" "}
-                <span className="font-medium">{pagination.total}</span> usuarios
+            {!isFuseActive && (
+              <div className="flex items-center justify-between space-x-2 py-4">
+                <div className="text-sm text-muted-foreground">
+                  Mostrando <span className="font-medium">{users.length}</span> de{" "}
+                  <span className="font-medium">{pagination.total}</span> usuarios
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pagination.page <= 1 || isLoading}
+                    onClick={() => handlePageChange(pagination.page - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pagination.page >= pagination.pages || isLoading}
+                    onClick={() => handlePageChange(pagination.page + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page <= 1 || isLoading}
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page >= pagination.pages || isLoading}
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </main>
