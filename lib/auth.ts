@@ -1,19 +1,29 @@
 "use server"
 
 import { cookies } from "next/headers"
-
-// Simulación de autenticación
-const VALID_EMAIL = "admin@ejemplo.com"
-const VALID_PASSWORD = "password"
+import { connectDB } from "@/lib/database/connect"
+import User from "@/lib/database/models/user"
 
 export async function login(email: string, password: string) {
-  // En un entorno real, verificaríamos contra una base de datos
-  if (email === VALID_EMAIL && password === VALID_PASSWORD) {
-    // Crear una sesión simple
+  try {
+    // Conectar a la base de datos
+    await connectDB()
+    
+    // Buscar el usuario por email
+    const user = await User.findOne({ email }).lean() as { _id: any, email: string, name: string, role: string, password: string } | null
+    
+    // Verificar si el usuario existe y la contraseña es correcta
+    if (!user || user.password !== password) {
+      throw new Error("Credenciales inválidas")
+    }
+    
+    // Crear una sesión 
     const session = {
       user: {
-        email,
-        name: "Administrador",
+        id: user._id.toString(),
+        email: user.email,
+        name: user.name,
+        role: user.role
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 horas
     } as any
@@ -27,9 +37,10 @@ export async function login(email: string, password: string) {
     })
 
     return session
+  } catch (error) {
+    console.error("Error en login:", error)
+    throw new Error("Credenciales inválidas")
   }
-
-  throw new Error("Credenciales inválidas")
 }
 
 export async function logout() {
