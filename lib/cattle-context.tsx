@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useToast } from "@/hooks/use-toast"
-import { generateMockCattle, generateMockZones } from "@/lib/mock-data"
 import { useAuth } from "@/lib/auth-context"
 
 export interface Cattle {
@@ -42,6 +41,7 @@ export function CattleProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [selectedCattleId, setSelectedCattleId] = useState<string | null>(null)
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
+  const [connectedCattleCount, setConnectedCattleCount] = useState(0)
   const { toast } = useToast()
   const { isAuthenticated } = useAuth()
 
@@ -52,16 +52,93 @@ export function CattleProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const mockZones = generateMockZones()
-    const mockCattle = generateMockCattle(mockZones)
+    const loadData = async () => {
+      setLoading(true)
+      try {
+        // Primero cargamos las zonas ya que podrían ser necesarias para mostrar el ganado
+        await fetchZones()
+        await fetchCattle()
 
-    setZones(mockZones)
-    setCattle(mockCattle)
-    setLoading(false)
+        // Reproducir sonido de bienvenida
+        const audio = new Audio("/moo.mp3")
+        audio.play().catch((e) => console.log("Error reproduciendo audio:", e))
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    // Reproducir sonido de bienvenida
-    const audio = new Audio("/moo.mp3")
-    audio.play().catch((e) => console.log("Error reproduciendo audio:", e))
+    loadData()
+  }, [isAuthenticated])
+
+  // Obtener zonas desde la API
+  const fetchZones = async () => {
+    try {
+      const response = await fetch('/api/zones');
+      if (!response.ok) throw new Error('Error fetching zones');
+      const data = await response.json();
+      setZones(data); // Los datos ya vienen serializados correctamente según la API
+    } catch (error) {
+      console.error("Error fetching zones:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las zonas",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Obtener ganado desde la API
+  const fetchCattle = async () => {
+    try {
+      const response = await fetch('/api/cattle');
+      if (!response.ok) throw new Error('Error fetching cattle');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Transformar la estructura de posición a tu formato actual si es necesario
+        const formattedCattle = data.data.map((cow: any) => ({
+          ...cow,
+          position: cow.position.coordinates ? 
+            [cow.position.coordinates[1], cow.position.coordinates[0]] : // [lat, lng]
+            [0, 0] // Valor por defecto si no hay coordenadas
+        }));
+        setCattle(formattedCattle);
+      } else {
+        throw new Error(data.error || 'Failed to fetch cattle');
+      }
+    } catch (error) {
+      console.error("Error fetching cattle:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo cargar el ganado",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // GET /api/dashboard
+  // Para estadísticas como número total o conectados
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await fetch('/api/dashboard');
+      if (!response.ok) throw new Error('Error fetching dashboard stats');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Actualizar estadísticas relevantes
+        // En lugar de calcular el número de ganado conectado desde el array local
+        setConnectedCattleCount(data.data.connectedCattle);
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+    }
+  };
+
+  // Llamar a la API para obtener estadísticas del tablero al cargar el componente
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchDashboardStats();
+    }
   }, [isAuthenticated])
 
   // Simular movimiento de vacas solo si el usuario está autenticado
