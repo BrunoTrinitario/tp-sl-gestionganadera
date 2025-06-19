@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, MapPin, X, Plus } from "lucide-react"
+import { Search, MapPin, X, Plus, Trash } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,16 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 // Función para calcular la distancia entre dos puntos (Haversine formula)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -62,6 +72,12 @@ export default function CattleList() {
     zoneId: "",
     imageUrl: "/placeholder.svg?height=200&width=200", // Imagen por defecto
   })
+  
+  // Estado para el diálogo de eliminar
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [selectedCattleToDelete, setSelectedCattleToDelete] = useState("")
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   // Configuración de Fuse.js
   const fuseOptions = {
@@ -221,33 +237,102 @@ export default function CattleList() {
     }
   }
 
+  // Manejar selección de animal para eliminar
+  const handleSelectCattleToDelete = (cattleId: string) => {
+    setSelectedCattleToDelete(cattleId)
+  }
+
+  // Iniciar proceso de confirmación de eliminación
+  const handleConfirmDelete = () => {
+    if (!selectedCattleToDelete) {
+      toast({
+        title: "Error",
+        description: "No se ha seleccionado ningún animal para eliminar",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    setIsDeleteDialogOpen(false)
+    setIsConfirmDeleteOpen(true)
+  }
+
+  // Ejecutar la eliminación
+  const handleDeleteCattle = async () => {
+    if (!selectedCattleToDelete) return
+    
+    try {
+      setIsDeleting(true)
+      
+      const response = await fetch(`/api/cattle?id=${selectedCattleToDelete}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast({
+          title: "Animal eliminado",
+          description: "El animal ha sido eliminado correctamente",
+        })
+        
+        // Si el animal eliminado estaba seleccionado, desseleccionarlo
+        if (selectedCattleId === selectedCattleToDelete) {
+          setSelectedCattleId(null)
+        }
+        
+        // Actualizar la lista
+        fetchCattle()
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al eliminar el animal",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error al eliminar ganado:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el animal. Intenta de nuevo más tarde.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+      setIsConfirmDeleteOpen(false)
+      setSelectedCattleToDelete("")
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-2">
-        <div className="relative flex-1 mr-2">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-          <Input
-            type="search"
-            placeholder="Buscar ganado..."
-            className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="absolute right-1 top-1 h-7 w-7 px-0"
-            onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-          >
-            <MapPin className="h-4 w-4" />
-            <span className="sr-only">Búsqueda avanzada</span>
-          </Button>
-        </div>
-        
-        {/* Botón para agregar nuevo ganado */}
+      {/* Barra de búsqueda en una fila completa */}
+      <div className="w-full relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+        <Input
+          type="search"
+          placeholder="Buscar ganado..."
+          className="pl-8 pr-10"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="absolute right-1 top-1 h-7 w-7 px-0"
+          onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+        >
+          <MapPin className="h-4 w-4" />
+          <span className="sr-only">Búsqueda avanzada</span>
+        </Button>
+      </div>
+      
+      {/* Botones en una segunda fila - modificado para ocupar el ancho completo */}
+      <div className="w-full grid grid-cols-2 gap-2">
+        {/* Botón para agregar */}
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="whitespace-nowrap">
+            <Button size="sm" variant="default" className="w-full">
               <Plus className="h-4 w-4 mr-1" />
               Agregar
             </Button>
@@ -315,7 +400,78 @@ export default function CattleList() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Botón para eliminar */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline" className="w-full text-red-500 border-red-200 hover:bg-red-50">
+              <Trash className="h-4 w-4 mr-1" />
+              Eliminar
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Eliminar animal</DialogTitle>
+              <DialogDescription>
+                Selecciona el animal que deseas eliminar del sistema.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="animal-to-delete" className="mb-2 block">Selecciona un animal</Label>
+              <Select 
+                value={selectedCattleToDelete} 
+                onValueChange={handleSelectCattleToDelete}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un animal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredCattle.map((cow) => (
+                    <SelectItem key={cow.id} value={cow.id}>
+                      {cow.name} {!cow.connected && "(Offline)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleConfirmDelete} 
+                disabled={!selectedCattleToDelete}
+              >
+                Continuar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
+
+      {/* Diálogo de confirmación para eliminación */}
+      <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setIsConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente {cattle.find(c => c.id === selectedCattleToDelete)?.name || "el animal seleccionado"} 
+              y no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteCattle}
+              disabled={isDeleting} 
+              className="bg-red-500 hover:bg-red-600"
+            >
+              {isDeleting ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Búsqueda avanzada */}
       {showAdvancedSearch && (
@@ -387,7 +543,7 @@ export default function CattleList() {
 
       {isLocationSearchActive && (
         <div className="flex items-center justify-between bg-green-50 p-2 rounded-md">
-          <span className="text-xs text-green-700">Mostrando ganado en un radio de {radius} km</span>
+          <span className="text-xs text-green-700">Mostrando ganado in un radio de {radius} km</span>
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={clearAdvancedSearch}>
             <X className="h-4 w-4" />
             <span className="sr-only">Limpiar filtro</span>
