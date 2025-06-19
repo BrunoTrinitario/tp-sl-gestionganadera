@@ -186,6 +186,8 @@ export default function CattleList() {
               <div className="flex-shrink-0 mr-3">
                 <div className="relative">
                   <Image
+                    width={40}
+                    height={40}
                     src={cow.imageUrl || "/placeholder.svg"}
                     alt={cow.name}
                     className="w-10 h-10 rounded-full object-cover"

@@ -167,24 +167,24 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     await connectDB()
+    
+    // Obtener email desde parámetros de consulta en lugar de la ruta
+    const email = request.nextUrl.searchParams.get("email")
 
-    // Obtener el ID del usuario desde la URL
-    const url = new URL(request.url)
-    const parts = url.pathname.split("/")
-    const userId = parts[parts.length - 1]
-
-    if (!userId) {
+    // Resto del código sigue igual
+    if (!email) {
       return NextResponse.json(
         {
           success: false,
-          error: "ID de usuario no proporcionado",
+          error: "Email de usuario no proporcionado",
         },
         { status: 400 },
       )
     }
 
     // Eliminar el usuario
-    const deletedUser = await User.findByIdAndDelete(userId)
+    console.log("Eliminando usuario con email:", email)
+    const deletedUser = await User.findOneAndDelete({ email })
 
     if (!deletedUser) {
       return NextResponse.json(
