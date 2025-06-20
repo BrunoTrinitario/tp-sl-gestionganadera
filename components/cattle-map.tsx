@@ -18,20 +18,30 @@ const cowIcon = new L.Icon({
 // Componente para actualizar la vista del mapa
 function MapUpdater({ cattle, selectedCattleId }: { cattle: Cattle[]; selectedCattleId: string | null }) {
   const map = useMap()
-
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
+  
+  // Efecto para invalidar el tamaño del mapa (solo una vez)
   useEffect(() => {
-    if (selectedCattleId) {
-      const selectedCow = cattle.find((cow) => cow.id === selectedCattleId)
-      if (selectedCow) {
-        map.setView(selectedCow.position, 16)
-      }
-    }
-
-    // Invalidar tamaño del mapa para asegurar que se renderice correctamente
     setTimeout(() => {
       map.invalidateSize()
     }, 300)
-  }, [map, cattle, selectedCattleId])
+  }, [map])
+  
+  // Efecto separado para gestionar la selección de animales
+  useEffect(() => {
+    // Solo hacer zoom si hay un ID seleccionado Y es diferente del último ID procesado
+    if (selectedCattleId && selectedCattleId !== lastSelectedId) {
+      const selectedCow = cattle.find((cow) => cow.id === selectedCattleId)
+      if (selectedCow) {
+        map.setView(selectedCow.position, 16)
+        setLastSelectedId(selectedCattleId)
+      }
+    } 
+    // Si seleccionamos null (deselección) actualizar el lastSelectedId
+    else if (selectedCattleId === null && lastSelectedId !== null) {
+      setLastSelectedId(null)
+    }
+  }, [map, cattle, selectedCattleId, lastSelectedId])
 
   return null
 }
@@ -99,6 +109,8 @@ export default function CattleMap() {
               <h3 className="font-semibold">{cow.name}</h3>
               <div className="my-2">
                 <Image
+                  width={64}
+                  height={64}
                   src={cow.imageUrl || "/placeholder.svg"}
                   alt={cow.name}
                   className="w-16 h-16 mx-auto rounded-full object-cover"
