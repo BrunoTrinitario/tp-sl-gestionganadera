@@ -16,6 +16,7 @@ Lo que debiamos hacer es hacer un fork del repositorio https://github.com/casasm
 * React
 * Debian
 * VirtualBox
+* Tailwind
 
 ## Que implementamos?
 Decidimos desviarnos un poco pero manteniendo el foco en el uso de software libre, y al mismo tiempo, permitirnos una experiencia cercana a la realidad.
@@ -68,6 +69,7 @@ on:
 
 # Se describen las acciones a realizar cuando se quiere hacer el commit
 jobs:
+  # Se describre las acciones que tengan que ver con distintas fases del commit, como build, deploy, lint, test, publish, security entre otras
   build:
     runs-on: ubuntu-latest
     steps:
@@ -85,77 +87,40 @@ jobs:
       - name: Lint (reglas de estilo)
         run: npm run lint
       
-      - name: Build (opcional)
-        run: npm run build
+      
+      #- name: Build (opcional)
+      #  run: npm run build
 
       #- name: Correr tests
       #        run: npm test
 
-      - name: Deploy en Render
-        if: success()
-        run: curl -X POST https://api.render.com/deploy/srv-d17n7kodl3ps738uit5g?key=ne0yX-MR30g
-
+  deploy:
+    - name: Deploy en Render
+      if: success()
+      run: curl -X POST https://api.render.com/deploy/srv-d17n7kodl3ps738uit5g?key=ne0yX-MR30g
 ```
+### Daemons 
+Estos archivos contienen scripts para (1) instalar las dependencias que utilizara el daemon y (2) crear el daemon como tal.
+La ejecucion de ambas es simple,``bash mongodump.sh`` y `` bash creardaemon.sh <intervalo de horas> "<base de datos cual se hara backup>"``.
+El daemon crea un archivo de log, indicando las acciones como crear la copia de la base de datos y eliminar la anterior.<br>
 
-
-## Emphasis
-
-*This text will be italic*  
-_This will also be italic_
-
-**This text will be bold**  
-__This will also be bold__
-
-_You **can** combine them_
-
-## Lists
-
-### Unordered
-
-* Item 1
-* Item 2
-* Item 2a
-* Item 2b
-    * Item 3a
-    * Item 3b
-
-### Ordered
-
-1. Item 1
-2. Item 2
-3. Item 3
-    1. Item 3a
-    2. Item 3b
-
-## Images
-
-![This is an alt text.](/image/sample.webp "This is a sample image.")
-
-## Links
-
-You may be using [Markdown Live Preview](https://markdownlivepreview.com/).
-
-## Blockquotes
-
-> Markdown is a lightweight markup language with plain-text-formatting syntax, created in 2004 by John Gruber with Aaron Swartz.
->
->> Markdown is often used to format readme files, for writing messages in online discussion forums, and to create rich text using a plain text editor.
-
-## Tables
-
-| Left columns  | Right columns |
+| archivo       | ruta          |
 | ------------- |:-------------:|
-| left foo      | right foo     |
-| left bar      | right bar     |
-| left baz      | right baz     |
+| Backup     | /var/backups/mongodb     |
+| Log      |  /var/log/${NOMBRE_SERVICIO}.log    |
+| Script     | /usr/local/bin/${NOMBRE_SERVICIO}.sh     |
+| Unit      | /etc/systemd/system/${NOMBRE_SERVICIO}.service"     |
 
-## Blocks of code
+## Que hace nuestro  software?
+Es una aplicacion web que permite el monitoreo de ganado en tiempo real, asigando zonas 
+## Como correr localmente nuestro software?
+tener node 18+ y mongoDB instalados, correr `npm install`, y `npm run dev` para correr en fase de desarrollo y `npm run build`, `npm run start` para deploys. 
 
-```
-let message = 'Hello world';
-alert(message);
-```
+## License
 
-## Inline code
+This project is licensed under the GNU General Public License v3.0.
 
-This web site is using `markedjs/marked`.
+You may copy, distribute and modify the software as long as you track changes/dates in source files. 
+Any derivative work must also be licensed under the GPL. 
+
+See the [LICENSE](./LICENSE) file for full details.
