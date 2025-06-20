@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { connectDB } from "@/lib/database/connect"
+import Zone from "@/lib/database/models/zone"
 
 /**
  * GET /api/zones
@@ -6,46 +8,106 @@ import { NextResponse } from "next/server"
  */
 export async function GET() {
   try {
-    // Simulación de datos de zonas
-    const zones = [
-      {
-        id: "farm",
-        name: "Granja Completa",
-        description: "Perímetro completo de la granja",
-        bounds: [
-          [40.7028, -74.016],
-          [40.7228, -73.996],
-        ],
-        color: "#3b82f6",
-      },
-      {
-        id: "stables",
-        name: "Establos",
-        description: "Área de descanso para el ganado",
-        bounds: [
-          [40.7048, -74.014],
-          [40.7088, -74.01],
-        ],
-        color: "#ef4444",
-      },
-      // Otras zonas se agregarían aquí
-    ]
+    await connectDB()
+    const zones = await Zone.find().lean()
+
+    // Serializar _id a id string
+    const serializedZones = zones.map((zone: any) => ({
+      id: zone._id.toString(),
+      name: zone.name,
+      description: zone.description,
+      bounds: zone.bounds,
+      color: zone.color,
+    }))
 
     return NextResponse.json(
-      {
-        success: true,
-        data: zones,
-      },
-      { status: 200 },
+      serializedZones,
+      { status: 200 }
     )
   } catch (error) {
     console.error("Error al obtener zonas:", error)
     return NextResponse.json(
+      { error: "Error al obtener zonas" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * POST /api/zones
+ * Crea una nueva zona
+ */
+export async function POST(request: Request) {
+  try {
+    await connectDB()
+    const body = await request.json()
+    const { name, description, bounds, color } = body
+
+    if (!name || !bounds || !color) {
+      return NextResponse.json(
+        { error: "Faltan campos obligatorios" },
+        { status: 400 }
+      )
+    }
+
+    const newZone = await Zone.create({ name, description, bounds, color })
+
+    return NextResponse.json(
       {
-        success: false,
-        error: "Error al obtener zonas",
+        success: true,
+        data: {
+          id: newZone._id.toString(),
+          name: newZone.name,
+          description: newZone.description,
+          bounds: newZone.bounds,
+          color: newZone.color,
+        }
       },
-      { status: 500 },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error("Error al crear zona:", error)
+    return NextResponse.json(
+      { error: "Error al crear zona" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * DELETE /api/zones?id=ZONE_ID
+ * Elimina una zona por su ID
+ */
+export async function DELETE(request: Request) {
+  try {
+    await connectDB()
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID de zona no proporcionado" },
+        { status: 400 }
+      )
+    }
+
+    const deleted = await Zone.findByIdAndDelete(id)
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Zona no encontrada" },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json(
+      { success: true, message: "Zona eliminada correctamente" },
+      { status: 200 }
+    )
+  } catch (error) {
+    console.error("Error al eliminar zona:", error)
+    return NextResponse.json(
+      { error: "Error al eliminar zona" },
+      { status: 500 }
     )
   }
 }
