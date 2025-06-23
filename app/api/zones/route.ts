@@ -83,7 +83,6 @@ export async function DELETE(request: Request) {
     await connectDB()
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
-
     if (!id) {
       return NextResponse.json(
         { error: "ID de zona no proporcionado" },

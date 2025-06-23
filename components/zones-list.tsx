@@ -1,7 +1,7 @@
 "use client"
 import { Button } from "@/components/ui/button"
 import { useCattle } from "@/lib/cattle-context"
-import { Plus } from "lucide-react"
+import { Plus, Trash } from "lucide-react"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,16 +11,8 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  DialogTitle
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
 
@@ -49,6 +41,59 @@ export default function ZonesList({ onItemClick }: ZonesListProps) {
     {} as Record<string, number>,
   )
 
+  async function addNewZone(){
+    if (newZone.name == "" || newZone.x1 == 0 || newZone.y1 == 0 || newZone.x2 == 0 || newZone.y2 ==  0){
+      alert("Datos invalidos");
+    } else{
+      const response = await fetch('/api/zones', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newZone.name,
+          description: newZone.description,
+          bounds: [[newZone.x1,newZone.y1],[newZone.x2,newZone.y2]],  
+          color:generateHexColor()
+        }),
+      }).then(response => {
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            throw new Error(`Error HTTP: ${response.status}`);
+          }
+        })
+    
+      setNewZone({
+        name: "",
+        description: "",
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 0,
+      });
+    }
+  }
+
+  function generateHexColor() {
+    const hex = Math.floor(Math.random() * 0xffffff).toString(16);
+    return "#" + hex.padStart(6, "0");
+  }
+  async function deleteZone(id: string) {
+    console.log(id);
+    const response = await fetch(`/api/zones?id=${id}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) 
+      throw new Error("Error al eliminar la zona");
+    else
+      window.location.reload();
+  } 
+
   return (
     <div className="space-y-1">
       {zones.map((zone) => (
@@ -69,6 +114,17 @@ export default function ZonesList({ onItemClick }: ZonesListProps) {
           <span className="text-xs font-medium bg-gray-100 rounded-full px-2 py-0.5">
             {cattleCountByZone[zone.id] || 0}
           </span>
+          <Button
+              size="sm"
+              variant="outline"
+              className="w-10 h-10 text-red-500 border-red-200 hover:bg-red-50 flex justify-center items-center p-0"
+              onClick={(e) => {
+                e.stopPropagation(); // Para que no dispare el onClick del botón padre <button>
+                deleteZone(zone.id);
+              }}
+            >
+              <Trash className="h-5 w-5" />
+          </Button>
         </button>
       ))}
       <Button onClick={() => setIsAddDialogOpen(true)} size="sm" variant="default" className="w-full">
@@ -141,7 +197,7 @@ export default function ZonesList({ onItemClick }: ZonesListProps) {
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={addNewZone}>
                 Guardar
             </Button>
           </DialogFooter>
