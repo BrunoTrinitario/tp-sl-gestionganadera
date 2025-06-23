@@ -97,7 +97,7 @@ jobs:
   deploy:
     - name: Deploy en Render
       if: success()
-      run: curl -X POST https://api.render.com/deploy/srv-d17n7kodl3ps738uit5g?key=ne0yX-MR30g
+      run: curl -X POST <URL_PARA_DEPLOY>
 ```
 ### Daemons 
 Estos archivos contienen scripts para (1) instalar las dependencias que utilizara el daemon y (2) crear el daemon como tal.
