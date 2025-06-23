@@ -61,6 +61,7 @@ export default function CattleList() {
   const [radius, setRadius] = useState("")
   const [isLocationSearchActive, setIsLocationSearchActive] = useState(false)
   const [searchResults, setSearchResults] = useState(cattle)
+  const [geoResults, setGeoResults] = useState<any[]>([])
   const { toast } = useToast()
   
   // Estado para el formulario de nuevo ganado
@@ -100,36 +101,47 @@ export default function CattleList() {
   
   // Realizar búsqueda cuando cambia el término de búsqueda
   useEffect(() => {
+    // Si está activa la búsqueda geoespacial, no sobrescribir los resultados
+    if (isLocationSearchActive) return;
+
     if (!searchTerm) {
       setSearchResults(cattle)
       return
     }
-    
+
     const results = fuse.search(searchTerm)
-    // Extraer los objetos de los resultados de búsqueda
     const matchedCattle = results.map(result => result.item)
     setSearchResults(matchedCattle)
-  }, [searchTerm, cattle, fuse])
+  }, [searchTerm, cattle, fuse, isLocationSearchActive])
   
-  // Filtrar por ubicación si la búsqueda avanzada está activa
-  let filteredCattle = searchResults
-  
-  if (isLocationSearchActive && latitude && longitude && radius) {
-    const lat = Number.parseFloat(latitude)
-    const lng = Number.parseFloat(longitude)
-    const rad = Number.parseFloat(radius)
-
-    if (!isNaN(lat) && !isNaN(lng) && !isNaN(rad)) {
-      filteredCattle = filteredCattle.filter((cow) => {
-        const distance = calculateDistance(lat, lng, cow.position[0], cow.position[1])
-        return distance <= rad
-      })
-    }
-  }
-
-  const handleAdvancedSearch = () => {
+  // Elimina el filtrado geoespacial en frontend y reemplázalo por fetch al backend
+  const handleAdvancedSearch = async () => {
     if (latitude && longitude && radius) {
       setIsLocationSearchActive(true)
+      try {
+        const params = new URLSearchParams({
+          lat: latitude,
+          lng: longitude,
+          radius: radius,
+        })
+        const response = await fetch(`/api/cattle?${params.toString()}`)
+        const data = await response.json()
+        if (data.success) {
+          setGeoResults(data.data)
+        } else {
+          toast({
+            title: "Error",
+            description: data.error || "Error al buscar ganado por ubicación",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "No se pudo realizar la búsqueda geoespacial",
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -138,6 +150,7 @@ export default function CattleList() {
     setLongitude("")
     setRadius("")
     setIsLocationSearchActive(false)
+    setGeoResults([])
   }
 
   // Función para manejar el envío del formulario
@@ -303,6 +316,14 @@ export default function CattleList() {
       setSelectedCattleToDelete("")
     }
   }
+
+  // Aplica el filtro de texto sobre geoResults si está activo el filtro geoespacial
+  const filteredCattle = useMemo(() => {
+    const baseList = isLocationSearchActive ? geoResults : cattle
+    if (!searchTerm) return baseList
+    const fuseInstance = new Fuse(baseList, fuseOptions)
+    return fuseInstance.search(searchTerm).map(result => result.item)
+  }, [searchTerm, cattle, geoResults, isLocationSearchActive])
 
   return (
     <div className="space-y-4">
